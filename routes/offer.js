@@ -48,8 +48,6 @@ router.post(
       }
       await newOffer.save();
 
-      // TODO: refind and populate "owner"?
-
       res.status(201).json(newOffer);
     } catch (error) {
       res.status(500).json({ message: error.message });
