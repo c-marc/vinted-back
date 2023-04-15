@@ -11,9 +11,14 @@ const convertToBase64 = (file) => {
   return `data:${file.mimetype};base64,${file.data.toString("base64")}`;
 };
 
-const uploadPicture = async (pictureToUpload, folder = "/") => {
+// Verify mimetype starts with image
+const isImage = (file) => {
+  return /^image/.test(file.mimetype);
+};
+
+const uploadPicture = async (picture, folder = "/") => {
   try {
-    return await cloudinary.uploader.upload(convertToBase64(pictureToUpload), {
+    return await cloudinary.uploader.upload(convertToBase64(picture), {
       folder: folder,
     });
   } catch (error) {
@@ -41,4 +46,4 @@ const deletePicturesAndFolder = async (folder) => {
   }
 };
 
-module.exports = { uploadPicture, deletePicturesAndFolder };
+module.exports = { isImage, uploadPicture, deletePicturesAndFolder };

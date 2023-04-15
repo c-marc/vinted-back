@@ -4,7 +4,7 @@ const encBase64 = require("crypto-js/enc-base64");
 const uid2 = require("uid2");
 
 const User = require("../models/User");
-const { uploadPicture } = require("../services/cloudinary");
+const { isImage, uploadPicture } = require("../services/cloudinary");
 
 const router = express.Router();
 
@@ -39,6 +39,10 @@ router.post("/user/signup", async (req, res) => {
       const picture = !Array.isArray(req.files.picture)
         ? req.files.picture
         : req.files.picture[0];
+
+      if (!isImage(picture)) {
+        return res.status(400).json({ message: "File is not an image" });
+      }
       const folder = "/vinted/users/" + offerToUpdate._id;
 
       const avatar = await uploadPicture(picture, folder);

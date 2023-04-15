@@ -3,6 +3,7 @@ const fileUpload = require("express-fileupload");
 
 const Offer = require("../models/Offer");
 const {
+  isImage,
   uploadPicture,
   deletePicturesAndFolder,
 } = require("../services/cloudinary");
@@ -45,6 +46,9 @@ router.post(
       if (req.files?.picture) {
         const folder = "/vinted/offers/" + newOffer._id;
         if (!Array.isArray(req.files.picture)) {
+          if (!isImage(picture)) {
+            return res.status(400).json({ message: "File is not an image" });
+          }
           const uploadedPicture = await uploadPicture(
             req.files.picture,
             folder
@@ -117,6 +121,9 @@ router.put(
         await deletePicturesAndFolder(folder);
 
         if (!Array.isArray(req.files.picture)) {
+          if (!isImage(picture)) {
+            return res.status(400).json({ message: "File is not an image" });
+          }
           // upload new one
           const uploadedPicture = await uploadPicture(
             req.files.picture,
