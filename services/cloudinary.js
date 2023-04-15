@@ -1,6 +1,5 @@
 const cloudinary = require("cloudinary").v2;
 
-// TODO: put in .env
 cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
@@ -26,7 +25,7 @@ const uploadPicture = async (picture, folder = "/") => {
   }
 };
 
-// Obsolete
+// Deprecated: see deletePicturesAndFolder
 const deletePicture = async (public_id) => {
   try {
     await cloudinary.uploader.destroy(public_id);
@@ -35,6 +34,7 @@ const deletePicture = async (public_id) => {
   }
 };
 
+// TODO: consider keeping these separated
 const deletePicturesAndFolder = async (folder) => {
   try {
     // delete content
