@@ -4,6 +4,7 @@ const encBase64 = require("crypto-js/enc-base64");
 const uid2 = require("uid2");
 
 const User = require("../models/User");
+const { uploadPicture } = require("../services/cloudinary");
 
 const router = express.Router();
 
@@ -25,7 +26,7 @@ router.post("/user/signup", async (req, res) => {
 
     const token = uid2(64);
 
-    const newUser = await User.create({
+    const newUser = new User({
       email,
       account: { username },
       newsletter,
@@ -33,6 +34,18 @@ router.post("/user/signup", async (req, res) => {
       hash,
       token,
     });
+
+    if (req.files?.picture) {
+      const picture = !Array.isArray(req.files.picture)
+        ? req.files.picture
+        : req.files.picture[0];
+      const folder = "/vinted/users/" + offerToUpdate._id;
+
+      const avatar = await uploadPicture(picture, folder);
+      newUser.account.avatar = avatar;
+    }
+
+    await newUser.save();
 
     const securedUser = {
       email: newUser.email,
