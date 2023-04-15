@@ -21,6 +21,7 @@ const uploadPicture = async (pictureToUpload, folder = "/") => {
   }
 };
 
+// Obsolete
 const deletePicture = async (public_id) => {
   try {
     await cloudinary.uploader.destroy(public_id);
@@ -29,4 +30,15 @@ const deletePicture = async (public_id) => {
   }
 };
 
-module.exports = { uploadPicture, deletePicture };
+const deletePicturesAndFolder = async (folder) => {
+  try {
+    // delete content
+    await cloudinary.api.delete_resources_by_prefix(folder);
+    // delete folder
+    await cloudinary.api.delete_folder(folder);
+  } catch (error) {
+    throw error;
+  }
+};
+
+module.exports = { uploadPicture, deletePicturesAndFolder };

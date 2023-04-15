@@ -1,16 +1,16 @@
 const express = require("express");
 const fileUpload = require("express-fileupload");
 
-const User = require("../models/User");
 const Offer = require("../models/Offer");
-const { uploadPicture, deletePicture } = require("../services/cloudinary");
+const {
+  uploadPicture,
+  deletePicturesAndFolder,
+} = require("../services/cloudinary");
 const isAuthenticated = require("../middlewares/isAuthenticated");
 
 const router = express.Router();
 
-// URL : http://localhost:3000/offer/publish
-// Méthode HTTP : POST
-// Headers : Authorization Bearer Token
+// Create new offer
 router.post(
   "/offer/publish",
   isAuthenticated,
@@ -20,6 +20,8 @@ router.post(
       // get text part of the body
       const { title, description, price, condition, city, brand, size, color } =
         req.body;
+
+      //  TODO: validation?
 
       // create new Offer
       const newOffer = new Offer({
@@ -34,17 +36,23 @@ router.post(
           { city: city },
         ],
         product_image: null, // need offer._id first
+        // use full object to show full account when querying
         // owner: req.user._id,
-        owner: req.user, // use full object to show full account when querying
+        owner: req.user,
       });
 
       // get pic and try to upload
       if (req.files?.picture) {
         const folder = "/vinted/offers/" + newOffer._id;
-        const uploadedPicture = await uploadPicture(req.files.picture, folder);
-        // console.log(uploadPicture);
-        // update and save newOffer
-        newOffer.product_image = uploadedPicture;
+        if (!Array.isArray(req.files.picture)) {
+          const uploadedPicture = await uploadPicture(
+            req.files.picture,
+            folder
+          );
+          // update and save newOffer
+          newOffer.product_image = uploadedPicture;
+        }
+        // TODO add several pictures
       }
       await newOffer.save();
 
@@ -57,11 +65,11 @@ router.post(
 
 // Update offer
 // Beware: product_details is an Array with nested obj:
-// - markModified()
-// - or schema
-// - or full reassignement (trying this)
+// - markModified() and save()
+// - or deep schema and save()
+// - or FindByAndUpdate()
 router.put(
-  "/offer/:id/update",
+  "/offer/update/:id",
   isAuthenticated,
   fileUpload(), // needed for body ( form-data )
   async (req, res) => {
@@ -87,7 +95,8 @@ router.put(
         product_description: description ?? offerToUpdate.product_description,
         product_price: price ?? offerToUpdate.product_price,
         product_details: [
-          { brand: brand ?? currentDetails.brand }, // TODO : use the weird keynames MARQUE, etc...
+          // TODO : use the weird keynames MARQUE, etc...
+          { brand: brand ?? currentDetails.brand },
           { size: size ?? currentDetails.size },
           { condition: condition ?? currentDetails.condition },
           { color: color ?? currentDetails.color },
@@ -98,17 +107,28 @@ router.put(
       // deal with image update
       // get pic and try to upload
       if (req.files?.picture) {
+        // Option 1: use destroy(public_id)
         // delete previous pic
-        const public_id = offerToUpdate.product_image.public_id;
-        await deletePicture(public_id);
-        // upload new one
+        // const public_id = offerToUpdate.product_image.public_id;
+        // await deletePicture(public_id);
+        // Option 2: use delete_ressources and delete_folder
         const folder = "/vinted/offers/" + offerToUpdate._id;
-        const uploadedPicture = await uploadPicture(req.files.picture, folder);
-        // update and save newOffer
-        modifiedFields.product_image = uploadedPicture;
+
+        await deletePicturesAndFolder(folder);
+
+        if (!Array.isArray(req.files.picture)) {
+          // upload new one
+          const uploadedPicture = await uploadPicture(
+            req.files.picture,
+            folder
+          );
+          // update and save newOffer
+          modifiedFields.product_image = uploadedPicture;
+        }
+        // TODO: upload multiples pictures
       }
 
-      console.log("Goal\n", modifiedFields);
+      // console.log("Goal\n", modifiedFields);
 
       const updated = await Offer.findByIdAndUpdate(
         req.params.id,
@@ -122,19 +142,23 @@ router.put(
   }
 );
 
-// delete
-router.delete("/offer/:id/delete", isAuthenticated, async (req, res) => {
+// Delete offer
+router.delete("/offer/delete/:id", isAuthenticated, async (req, res) => {
   try {
     const id = req.params.id;
-    // delete images
-    // get public_id
+
     const offerToDelete = await Offer.findById(id);
     if (!offerToDelete) {
       return res.status(404).json({ message: "Unknow product id" });
     }
-    const public_id = offerToDelete.product_image.public_id;
-    await deletePicture(public_id);
-    // delete folder ?
+    // delete images
+    // Option 1: destroy(public_id)
+    // const public_id = offerToDelete.product_image.public_id;
+    //await deletePicture(public_id);
+    // Option 2: delete_ressources and _folder
+    const folder = "/vinted/offers/" + offerToUpdate._id;
+    await deletePicturesAndFolder(folder);
+
     // delete offer
     await Offer.findByIdAndDelete(id);
     res.json({ message: "Offer sucessfully deleted" });
@@ -143,7 +167,7 @@ router.delete("/offer/:id/delete", isAuthenticated, async (req, res) => {
   }
 });
 
-//GET
+//GET all offers
 // Query:
 // title : String
 // priceMin : Number
@@ -156,20 +180,16 @@ router.get("/offers", async (req, res) => {
 
     // TODO: validate
 
-    const titleRE = new RegExp(title ?? ".*", "i");
+    const filter = {};
 
-    const filter = {
-      product_name: titleRE,
-      product_price: {
-        // Warning: Number(undefined) is not undefined, it's NaN
-        // wrap everything
-        $gte: Number(priceMin ?? 0), //
-        $lte: Number(priceMax ?? 10 ** 6),
-        // or use different syntax
-        $gte: Number(priceMin) || 0,
-        $lte: Number(priceMax) || 10 ** 6,
-      },
-    };
+    if (title) filter.product_name = new RegExp(title ?? ".*", "i");
+
+    if (priceMin || priceMax) {
+      filter.product_price = {};
+      if (priceMin) filter.product_price.$gte = Number(priceMin);
+      if (priceMax) filter.product_price.$lte = Number(priceMax);
+    }
+    // console.log(filter);
 
     const sortingRule = {};
     if (sort === "price-desc") sortingRule.product_price = -1;
@@ -178,7 +198,6 @@ router.get("/offers", async (req, res) => {
     // defaults: page = 1, limit = 10
     const skip = ((page ?? 1) - 1) * (limit ?? 10);
 
-    console.log(filter);
     const offers = await Offer.find(filter)
       .sort(sortingRule)
       .skip(skip)
@@ -194,8 +213,10 @@ router.get("/offers", async (req, res) => {
   }
 });
 
+// Get one offer
 router.get("/offer/:id", async (req, res) => {
   try {
+    // populate owner field with account (and _id)
     const offer = await Offer.findById(req.params.id).populate(
       "owner",
       "account"
